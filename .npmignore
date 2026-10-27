@@ -1,0 +1,8 @@
+tests/
+examples/
+.github/
+.gitignore
+*.tgz
+coverage/
+.env
+test-downloads/

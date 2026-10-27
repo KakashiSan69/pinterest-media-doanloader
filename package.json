@@ -1,0 +1,52 @@
+{
+  "name": "pinterest-media-downloader",
+  "version": "1.0.0",
+  "description": "Search, extract, and download images & videos from Pinterest. Lightweight, zero-dependency, with CLI support.",
+  "main": "src/index.js",
+  "module": "src/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./src/index.mjs",
+      "require": "./src/index.js"
+    }
+  },
+  "bin": {
+    "pinterest-dl": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "node -c src/*.js src/*.mjs bin/*.js"
+  },
+  "keywords": [
+    "pinterest",
+    "download",
+    "video",
+    "image",
+    "scraper",
+    "search",
+    "pin",
+    "media",
+    "downloader"
+  ],
+  "author": "KakashiSan69",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KakashiSan69/pinterest-media-doanloader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KakashiSan69/pinterest-media-doanloader/issues"
+  },
+  "homepage": "https://github.com/KakashiSan69/pinterest-media-doanloader#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
