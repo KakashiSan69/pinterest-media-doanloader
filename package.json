@@ -11,7 +11,7 @@
     }
   },
   "bin": {
-    "pinterest-dl": "./bin/cli.js"
+    "pinterest-dl": "bin/cli.js"
   },
   "scripts": {
     "test": "node -c src/*.js src/*.mjs bin/*.js"
