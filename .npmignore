@@ -1,8 +1,26 @@
+# Testing & Dev
 tests/
+test/
 examples/
-.github/
-.gitignore
-*.tgz
 coverage/
-.env
 test-downloads/
+downloads/
+
+# CI/CD & Git
+.github/
+.git/
+.gitignore
+.gitattributes
+
+# Secrets & Config
+.env*
+.npmrc
+*.token
+*.key
+*.pem
+secrets/
+
+# Build artifacts
+*.tgz
+*.tar.gz
+*.log

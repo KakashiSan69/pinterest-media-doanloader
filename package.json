@@ -1,11 +1,13 @@
 {
   "name": "pinterest-media-downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Search, extract, and download images & videos from Pinterest. Lightweight, zero-dependency, with CLI support.",
   "main": "src/index.js",
   "module": "src/index.mjs",
+  "types": "src/index.d.ts",
   "exports": {
     ".": {
+      "types": "./src/index.d.ts",
       "import": "./src/index.mjs",
       "require": "./src/index.js"
     }
