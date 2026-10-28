@@ -1,7 +1,7 @@
 {
   "name": "pinterest-media-downloader",
-  "version": "1.0.1",
-  "description": "Search, extract, and download images & videos from Pinterest. Lightweight, zero-dependency, with CLI support.",
+  "version": "2.0.0",
+  "description": "Universal Pinterest media scraper & downloader. Supports all Pinterest URL types (pin.it shortlinks, mobile, international ccTLDs, idea pins, raw IDs) with zero dependencies and CLI support.",
   "main": "src/index.js",
   "module": "src/index.mjs",
   "types": "src/index.d.ts",
@@ -16,7 +16,8 @@
     "pinterest-dl": "bin/cli.js"
   },
   "scripts": {
-    "test": "node -c src/*.js src/*.mjs bin/*.js"
+    "test": "node test/test-all-urls.js",
+    "lint": "node -c src/*.js src/*.mjs bin/*.js test/*.js"
   },
   "keywords": [
     "pinterest",
@@ -27,7 +28,9 @@
     "search",
     "pin",
     "media",
-    "downloader"
+    "downloader",
+    "pin.it",
+    "idea-pin"
   ],
   "author": "KakashiSan69",
   "license": "MIT",
@@ -46,7 +49,8 @@
     "src/",
     "bin/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "test-results.json"
   ],
   "publishConfig": {
     "access": "public"

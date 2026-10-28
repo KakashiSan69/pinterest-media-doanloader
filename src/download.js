@@ -2,21 +2,49 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { getPin } = require('./pin');
 const {
   isPinterestUrl,
   isShortUrl,
+  extractPinId,
   sanitizeFilename,
   formatBytes,
   httpGetStream
 } = require('./utils');
 
+function hasFfmpeg() {
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-version'], (err) => {
+      resolve(!err);
+    });
+  });
+}
+
+function downloadHlsWithFfmpeg(hlsUrl, outputPath) {
+  return new Promise((resolve, reject) => {
+    execFile('ffmpeg', [
+      '-y',
+      '-i', hlsUrl,
+      '-c', 'copy',
+      outputPath
+    ], { timeout: 120000 }, (error) => {
+      if (error) {
+        return reject(new Error(`ffmpeg HLS download failed: ${error.message}`));
+      }
+      resolve();
+    });
+  });
+}
+
 async function download(url, outputDir = './', options = {}) {
-  if (!url || typeof url !== 'string') {
-    throw new Error('URL must be a non-empty string');
+  if (!url || (typeof url !== 'string' && typeof url !== 'number')) {
+    throw new Error('URL must be a non-empty string or number');
   }
+
+  const rawUrl = String(url).trim();
 
   if (typeof outputDir === 'object' && outputDir !== null) {
     options = outputDir;
@@ -29,39 +57,42 @@ async function download(url, outputDir = './', options = {}) {
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
 
   let mediaUrl = null;
+  let hlsUrl = null;
   let mediaType = 'image';
   let autoFilename = null;
+  let pin = null;
 
-  if (url.includes('pinimg.com')) {
-    mediaUrl = url;
-    mediaType = url.includes('v.pinimg.com') || url.endsWith('.mp4') ? 'video' : 'image';
-    autoFilename = path.basename(new URL(url).pathname);
-  } else if (isPinterestUrl(url) || isShortUrl(url) || /^\d+$/.test(url.trim())) {
-    const pin = await getPin(url);
+  if (rawUrl.includes('pinimg.com')) {
+    mediaUrl = rawUrl;
+    mediaType = rawUrl.includes('v.pinimg.com') || rawUrl.endsWith('.mp4') ? 'video' : 'image';
+    autoFilename = path.basename(new URL(rawUrl).pathname);
+  } else if (isPinterestUrl(rawUrl) || isShortUrl(rawUrl) || extractPinId(rawUrl) || /^\d+$/.test(rawUrl)) {
+    pin = await getPin(rawUrl);
 
     if (preferType === 'video' || (preferType === 'auto' && pin.type === 'video' && pin.videos)) {
       mediaType = 'video';
       const videoData = _selectVideoQuality(pin.videos, quality);
       if (videoData) {
         mediaUrl = videoData.url;
+        hlsUrl = videoData.hlsUrl || null;
       }
     }
 
-    if (!mediaUrl) {
+    if (!mediaUrl && !hlsUrl) {
       mediaType = 'image';
       mediaUrl = _selectImageQuality(pin.images, quality);
     }
 
-    if (!mediaUrl) {
+    if (!mediaUrl && !hlsUrl) {
       throw new Error('No downloadable media found for this pin');
     }
 
     autoFilename = sanitizeFilename(pin.title || pin.id);
   } else {
-    throw new Error(`Invalid URL: ${url}`);
+    throw new Error(`Invalid URL: ${rawUrl}`);
   }
 
-  const ext = _getExtension(mediaUrl, mediaType);
+  const ext = _getExtension(mediaUrl || hlsUrl, mediaType);
   const filename = options.filename
     ? sanitizeFilename(options.filename) + ext
     : (autoFilename && !autoFilename.includes('.') ? autoFilename + ext : autoFilename || `pinterest_${Date.now()}${ext}`);
@@ -76,56 +107,89 @@ async function download(url, outputDir = './', options = {}) {
     throw new Error(`File already exists: ${outputPath}. Use overwrite option to replace it.`);
   }
 
-  let streamRes;
-  try {
-    streamRes = await httpGetStream(mediaUrl, {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': 'https://www.pinterest.com/'
-    });
-
-    if (streamRes.statusCode < 200 || streamRes.statusCode >= 300) {
-      throw new Error(`HTTP ${streamRes.statusCode}`);
-    }
-  } catch (err) {
-    if (mediaType === 'video' && mediaUrl.includes('/720p/')) {
-      const altUrl = mediaUrl.replace('/720p/', '/expMp4/');
-      streamRes = await httpGetStream(altUrl, {
+  // Attempt direct download if mediaUrl is available
+  let directDownloadSuccess = false;
+  if (mediaUrl) {
+    try {
+      const streamRes = await httpGetStream(mediaUrl, {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.pinterest.com/'
       });
+
       if (streamRes.statusCode >= 200 && streamRes.statusCode < 300) {
-        mediaUrl = altUrl;
-      } else {
-        throw new Error(`Failed to download media: ${err.message}`);
+        const { stream, headers } = streamRes;
+        const totalBytes = parseInt(headers['content-length'], 10) || 0;
+        let downloadedBytes = 0;
+
+        const progressTracker = new Transform({
+          transform(chunk, encoding, callback) {
+            downloadedBytes += chunk.length;
+            if (onProgress && totalBytes > 0) {
+              onProgress(downloadedBytes, totalBytes);
+            }
+            callback(null, chunk);
+          }
+        });
+
+        const writeStream = fs.createWriteStream(outputPath);
+        await pipeline(stream, progressTracker, writeStream);
+        directDownloadSuccess = true;
       }
-    } else {
-      throw new Error(`Failed to download media: ${err.message}`);
-    }
+    } catch {}
   }
 
-  const { stream, headers } = streamRes;
-  const totalBytes = parseInt(headers['content-length'], 10) || 0;
-  let downloadedBytes = 0;
+  // If direct stream failed or wasn't available, check for HLS or alternate formats
+  if (!directDownloadSuccess) {
+    let hlsSuccess = false;
 
-  const progressTracker = new Transform({
-    transform(chunk, encoding, callback) {
-      downloadedBytes += chunk.length;
-      if (onProgress && totalBytes > 0) {
-        onProgress(downloadedBytes, totalBytes);
+    if (mediaType === 'video' && hlsUrl) {
+      const canUseFfmpeg = await hasFfmpeg();
+      if (canUseFfmpeg) {
+        try {
+          await downloadHlsWithFfmpeg(hlsUrl, outputPath);
+          hlsSuccess = true;
+        } catch {}
       }
-      callback(null, chunk);
     }
-  });
 
-  const writeStream = fs.createWriteStream(outputPath);
+    // If video could not be fetched and preferType is auto, fallback to high quality image
+    if (!hlsSuccess) {
+      if (mediaType === 'video' && preferType === 'auto' && pin && pin.images) {
+        const fallbackImgUrl = _selectImageQuality(pin.images, quality);
+        if (fallbackImgUrl) {
+          const imgExt = _getExtension(fallbackImgUrl, 'image');
+          const imgFilename = (options.filename ? sanitizeFilename(options.filename) : autoFilename) + imgExt;
+          const imgOutputPath = path.join(outputDir, imgFilename);
 
-  try {
-    await pipeline(stream, progressTracker, writeStream);
-  } catch (error) {
-    try {
-      fs.unlinkSync(outputPath);
-    } catch {}
-    throw new Error(`Download failed: ${error.message}`);
+          const streamRes = await httpGetStream(fallbackImgUrl, {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://www.pinterest.com/'
+          });
+
+          if (streamRes.statusCode >= 200 && streamRes.statusCode < 300) {
+            const writeStream = fs.createWriteStream(imgOutputPath);
+            await pipeline(streamRes.stream, writeStream);
+
+            const stats = fs.statSync(imgOutputPath);
+            return {
+              path: imgOutputPath,
+              size: stats.size,
+              sizeFormatted: formatBytes(stats.size),
+              type: 'image',
+              url: fallbackImgUrl,
+              filename: imgFilename
+            };
+          }
+        }
+      }
+
+      // Cleanup any empty or partial file
+      try {
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      } catch {}
+
+      throw new Error(`Failed to download media from: ${rawUrl}`);
+    }
   }
 
   const stats = fs.statSync(outputPath);
@@ -135,7 +199,7 @@ async function download(url, outputDir = './', options = {}) {
     size: stats.size,
     sizeFormatted: formatBytes(stats.size),
     type: mediaType,
-    url: mediaUrl,
+    url: mediaUrl || hlsUrl,
     filename
   };
 }

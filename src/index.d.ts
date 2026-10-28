@@ -93,13 +93,38 @@ export function search(query: string, options?: SearchOptions): Promise<SearchRe
 /**
  * Fetch detailed metadata for a pin using its URL, short URL (pin.it), or ID.
  */
-export function getPin(urlOrId: string): Promise<Pin>;
+export function getPin(urlOrId: string | number): Promise<Pin>;
 
 /**
  * Download pin media (image or video) directly to disk.
  */
 export function download(
-  url: string,
+  url: string | number,
   outputDir?: string | DownloadOptions,
   options?: DownloadOptions
 ): Promise<DownloadResult>;
+
+/**
+ * Check if a given URL belongs to Pinterest (including domains, subdomains, and pin.it).
+ */
+export function isPinterestUrl(url: string | number): boolean;
+
+/**
+ * Check if a URL is a Pinterest short link or redirect URL.
+ */
+export function isShortUrl(url: string): boolean;
+
+/**
+ * Extract a numeric Pinterest pin ID from any supported URL format or string.
+ */
+export function extractPinId(url: string | number): string | null;
+
+/**
+ * Resolve a shortened Pinterest URL through all HTTP redirects to its target URL.
+ */
+export function resolveShortUrl(shortUrl: string, maxRedirects?: number): Promise<string>;
+
+/**
+ * Normalize a URL string by ensuring a valid protocol prefix.
+ */
+export function normalizeUrl(input: string): string;

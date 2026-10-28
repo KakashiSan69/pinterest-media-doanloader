@@ -2,32 +2,35 @@
 
 const { PinterestClient } = require('./client');
 const { parsePinResponse } = require('./parser');
-const { isPinterestUrl, isShortUrl, extractPinId, resolveShortUrl } = require('./utils');
+const {
+  isPinterestUrl,
+  isShortUrl,
+  extractPinId,
+  resolveShortUrl
+} = require('./utils');
 
 async function getPin(urlOrId) {
-  if (!urlOrId || typeof urlOrId !== 'string') {
-    throw new Error('Pin URL or ID must be a non-empty string');
+  if (!urlOrId || (typeof urlOrId !== 'string' && typeof urlOrId !== 'number')) {
+    throw new Error('Pin URL or ID must be a non-empty string or number');
   }
 
-  let pinId = null;
+  const rawInput = String(urlOrId).trim();
+  let pinId = extractPinId(rawInput);
 
-  if (/^\d+$/.test(urlOrId.trim())) {
-    pinId = urlOrId.trim();
-  } else if (isShortUrl(urlOrId)) {
-    try {
-      const resolvedUrl = await resolveShortUrl(urlOrId);
-      pinId = extractPinId(resolvedUrl);
-    } catch (error) {
-      throw new Error(`Failed to resolve short URL: ${error.message}`);
+  // If pinId was not extracted directly, resolve short / redirected URL
+  if (!pinId) {
+    if (isShortUrl(rawInput) || isPinterestUrl(rawInput) || /^https?:\/\//i.test(rawInput)) {
+      try {
+        const resolvedUrl = await resolveShortUrl(rawInput);
+        pinId = extractPinId(resolvedUrl);
+      } catch (error) {
+        throw new Error(`Failed to resolve short URL: ${error.message}`);
+      }
     }
-  } else if (isPinterestUrl(urlOrId)) {
-    pinId = extractPinId(urlOrId);
-  } else {
-    throw new Error(`Invalid Pinterest URL or pin ID: ${urlOrId}`);
   }
 
   if (!pinId) {
-    throw new Error(`Could not extract pin ID from: ${urlOrId}`);
+    throw new Error(`Could not extract pin ID from: ${rawInput}`);
   }
 
   const client = new PinterestClient();

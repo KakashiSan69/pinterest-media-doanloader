@@ -28,15 +28,17 @@ function parseArgs(argv) {
         args[arg.substring(2)] = true;
       }
     } else if (arg.startsWith('-') && arg.length === 2) {
+      const flag = arg[1];
       if (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
-        args[arg.substring(1)] = argv[i + 1];
+        args[flag] = argv[i + 1];
         i++;
       } else {
-        args[arg.substring(1)] = true;
+        args[flag] = true;
       }
     } else {
       args._.push(arg);
     }
+
     i++;
   }
 
@@ -44,8 +46,8 @@ function parseArgs(argv) {
 }
 
 const HELP = `
-\x1b[1m\x1b[36mpinterest-dl\x1b[0m v${VERSION}
-\x1b[2mSearch, extract, and download images & videos from Pinterest\x1b[0m
+\x1b[1mpinterest-media-downloader\x1b[0m v${VERSION}
+Download images and videos from Pinterest. Lightweight & zero-dependency.
 
 \x1b[1mUSAGE:\x1b[0m
   pinterest-dl <command> [options]
@@ -55,16 +57,31 @@ const HELP = `
   \x1b[33minfo\x1b[0m <url>           Get pin metadata (title, type, media URLs)
   \x1b[33mdownload\x1b[0m <url>       Download a pin's media to disk
 
+\x1b[1mSUPPORTED URL FORMATS:\x1b[0m
+  • Short URLs:        https://pin.it/abc1234, pin.it/abc1234
+  • Standard Pins:     https://www.pinterest.com/pin/123456789/
+  • Mobile Pins:       https://m.pinterest.com/pin/123456789/
+  • Regional Domains:  https://in.pinterest.com/pin/..., pinterest.co.uk/pin/...
+  • Idea / Story Pins: https://www.pinterest.com/idea-pin/123456789/
+  • App Deep Links:    pinterest://pin/123456789
+  • Raw Pin IDs:       123456789
+
 \x1b[1mSEARCH OPTIONS:\x1b[0m
   --limit, -l          Number of results (default: 10)
   --type, -t           Filter: 'all' | 'images' | 'videos' (default: 'all')
   --output, -o         Output format: 'table' | 'json' (default: 'table')
+  --json               Shortcut for --output json
+
+\x1b[1mINFO OPTIONS:\x1b[0m
+  --output, -o         Output format: 'table' | 'json' (default: 'table')
+  --json               Shortcut for --output json
 
 \x1b[1mDOWNLOAD OPTIONS:\x1b[0m
   --quality, -q        Quality: 'original' | 'high' | 'medium' | 'low' (default: 'original')
   --output, -o         Output directory (default: './')
   --filename, -f       Custom filename (auto-generated if omitted)
   --overwrite          Overwrite existing files
+  --json               Output result as JSON
 
 \x1b[1mGLOBAL OPTIONS:\x1b[0m
   --help, -h           Show this help message
@@ -72,9 +89,9 @@ const HELP = `
 
 \x1b[1mEXAMPLES:\x1b[0m
   $ pinterest-dl search "aesthetic wallpapers" --limit 10
-  $ pinterest-dl search "cooking videos" --type videos --output json
-  $ pinterest-dl info https://pin.it/abc123
-  $ pinterest-dl download https://pin.it/abc123 -q high -o ./downloads
+  $ pinterest-dl search "cooking videos" --type videos --json
+  $ pinterest-dl info https://pin.it/WyKwAMsAR --json
+  $ pinterest-dl download https://pin.it/WyKwAMsAR -q high -o ./downloads
 `;
 
 function printTable(pins) {
@@ -117,14 +134,16 @@ function printTable(pins) {
 async function cmdSearch(query, args) {
   const limit = parseInt(args.limit || args.l || '10', 10);
   const type = args.type || args.t || 'all';
-  const output = args.output || args.o || 'table';
+  const isJson = args.output === 'json' || args.o === 'json' || args.json;
 
-  console.log(`\x1b[36m⏳ Searching Pinterest for "${query}"...\x1b[0m`);
+  if (!isJson) {
+    console.log(`\x1b[36m⏳ Searching Pinterest for "${query}"...\x1b[0m`);
+  }
 
   try {
     const results = await search(query, { limit, type });
 
-    if (output === 'json') {
+    if (isJson) {
       console.log(JSON.stringify(results, null, 2));
     } else {
       printTable(results.pins);
@@ -133,19 +152,26 @@ async function cmdSearch(query, args) {
       }
     }
   } catch (error) {
-    console.error(`\x1b[31m✖ Search failed: ${error.message}\x1b[0m`);
+    if (isJson) {
+      console.log(JSON.stringify({ error: error.message }, null, 2));
+    } else {
+      console.error(`\x1b[31m✖ Search failed: ${error.message}\x1b[0m`);
+    }
     process.exit(1);
   }
 }
 
 async function cmdInfo(url, args) {
-  console.log(`\x1b[36m⏳ Fetching pin info...\x1b[0m`);
+  const isJson = args.output === 'json' || args.o === 'json' || args.json;
+
+  if (!isJson) {
+    console.log(`\x1b[36m⏳ Fetching pin info...\x1b[0m`);
+  }
 
   try {
     const pin = await getPin(url);
-    const output = args.output || args.o || 'table';
 
-    if (output === 'json') {
+    if (isJson) {
       console.log(JSON.stringify(pin, null, 2));
       return;
     }
@@ -186,7 +212,11 @@ async function cmdInfo(url, args) {
     if (pin.metadata.domain)          console.log(`    Domain:     ${pin.metadata.domain}`);
     console.log('');
   } catch (error) {
-    console.error(`\x1b[31m✖ Failed to get pin info: ${error.message}\x1b[0m`);
+    if (isJson) {
+      console.log(JSON.stringify({ error: error.message }, null, 2));
+    } else {
+      console.error(`\x1b[31m✖ Failed to get pin info: ${error.message}\x1b[0m`);
+    }
     process.exit(1);
   }
 }
@@ -196,8 +226,11 @@ async function cmdDownload(url, args) {
   const outputDir = args.output || args.o || './';
   const filename = args.filename || args.f || undefined;
   const overwrite = args.overwrite || false;
+  const isJson = args.json || false;
 
-  console.log(`\x1b[36m⏳ Downloading...\x1b[0m`);
+  if (!isJson) {
+    console.log(`\x1b[36m⏳ Downloading...\x1b[0m`);
+  }
 
   try {
     let lastProgress = 0;
@@ -205,7 +238,7 @@ async function cmdDownload(url, args) {
       quality,
       filename,
       overwrite,
-      onProgress: (downloaded, total) => {
+      onProgress: isJson ? null : (downloaded, total) => {
         const pct = Math.round(downloaded / total * 100);
         if (pct >= lastProgress + 10) {
           process.stdout.write(`\r\x1b[36m  ⬇ Downloading... ${pct}% (${formatBytes(downloaded)} / ${formatBytes(total)})\x1b[0m`);
@@ -213,6 +246,11 @@ async function cmdDownload(url, args) {
         }
       }
     });
+
+    if (isJson) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
 
     console.log('');
     console.log('');
@@ -224,7 +262,11 @@ async function cmdDownload(url, args) {
     console.log(`  \x1b[33mType:\x1b[0m      ${result.type}`);
     console.log('');
   } catch (error) {
-    console.error(`\n\x1b[31m✖ Download failed: ${error.message}\x1b[0m`);
+    if (isJson) {
+      console.log(JSON.stringify({ error: error.message }, null, 2));
+    } else {
+      console.error(`\n\x1b[31m✖ Download failed: ${error.message}\x1b[0m`);
+    }
     process.exit(1);
   }
 }

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📌 pinterest-media-downloader
+# �� pinterest-media-downloader v2.0.0
 
 **A powerful, zero-dependency Node.js library and CLI tool to search, extract metadata, and download high-resolution images & videos from Pinterest.**
 
@@ -13,11 +13,12 @@
 
 <p align="center">
   <a href="#-key-features">Features</a> •
+  <a href="#-supported-url-formats">Supported URL Types</a> •
   <a href="#-installation">Installation</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-cli-tool">CLI Guide</a> •
   <a href="#-api-reference">API Reference</a> •
-  <a href="#-advanced-recipes">Advanced Recipes</a> •
+  <a href="#-testing">Testing</a> •
   <a href="#-legal-disclaimer">Disclaimer</a>
 </p>
 
@@ -27,13 +28,39 @@
 
 ## ⚡ Key Features
 
+- 🌐 **Universal URL Compatibility (v2.0)** — Supports **ALL** Pinterest URL variations: `pin.it` shortlinks (with multi-hop redirect resolution), international ccTLDs (`.co.uk`, `.ca`, `.de`, `.fr`, etc.), mobile subdomains (`m.pinterest.com`), Idea/Story Pins, app deep links (`pinterest://`), protocol-less URLs, and raw pin IDs.
 - 🔍 **Universal Search** — Search Pinterest by keyword with filters for images, videos, and pagination bookmark support.
 - 📌 **Deep Pin Metadata** — Extract title, description, author profile, board info, likes/saves count, and dominant color.
-- ⬇️ **Lossless Media Downloader** — Fetch the highest quality original image (`/originals/`) or highest bitrate video (`1080p`/`720p`).
+- ⬇️ **Lossless Media Downloader** — Fetch the highest quality original image (`/originals/`) or highest bitrate video (`1080p`/`720p` MP4 & HLS stream support).
 - ⚡ **Zero External Dependencies** — Built 100% on native Node.js core modules (`node:https`, `node:stream`). Super fast and lightweight!
-- 🖥️ **First-Class CLI** — Use `pinterest-dl` from your terminal or directly via `npx` with progress indicators and JSON output.
+- 🖥️ **First-Class CLI** — Use `pinterest-dl` from your terminal or directly via `npx` with progress indicators and `--json` output.
 - 📦 **Dual Module & TypeScript Ready** — First-class support for ES Modules (`import`), CommonJS (`require`), and bundled TypeScript declarations (`.d.ts`).
-- 🔗 **Smart URL Resolver** — Automatically expands short URLs (`pin.it/...`), handles regional domains (`in.pinterest.com`, `pinterest.co.uk`), and extracts pin IDs directly.
+- 🛠️ **Exported Utility Helpers** — Validate and extract pin IDs directly with `extractPinId()`, `isPinterestUrl()`, `isShortUrl()`, and `resolveShortUrl()`.
+
+---
+
+## 🔗 Supported URL Formats
+
+`pinterest-media-downloader` v2.0 introduces universal URL recognition and recursive redirect expansion:
+
+| URL Type | Example Format |
+|---|---|
+| **Short Links (pin.it)** | `https://pin.it/WyKwAMsAR`, `http://pin.it/abc1234`, `pin.it/abc` |
+| **Short Links with Tracking** | `https://pin.it/WyKwAMsAR?sub_id=share123` |
+| **API Redirect Endpoints** | `https://api.pinterest.com/url_shortener/WyKwAMsAR/redirect/` |
+| **Standard Pins (HTTPS/HTTP)** | `https://www.pinterest.com/pin/659073726759755724/` |
+| **Without Trailing Slash** | `https://www.pinterest.com/pin/659073726759755724` |
+| **Protocol-less URLs** | `pinterest.com/pin/659073726759755724`, `pin.it/WyKwAMsAR` |
+| **Mobile Subdomains** | `https://m.pinterest.com/pin/...`, `https://mobile.pinterest.com/pin/...` |
+| **Regional Subdomains** | `https://in.pinterest.com/...`, `https://de.pinterest.com/...`, `https://br.pinterest.com/...` |
+| **Country ccTLDs** | `https://www.pinterest.co.uk/pin/...`, `pinterest.ca`, `pinterest.de`, `pinterest.fr`, etc. |
+| **Idea & Story Pins** | `https://www.pinterest.com/idea-pin/659073726759755724/`, `.../ideas/slug/659.../` |
+| **Pin Creation & Builder** | `https://www.pinterest.com/pin-creation/659073726759755724/` |
+| **User & Board Paths** | `https://www.pinterest.com/username/boardname/pin/659073726759755724/` |
+| **Query Parameter Pins** | `https://www.pinterest.com/?pin=659073726759755724` |
+| **Mobile App Deep Links** | `pinterest://pin/659073726759755724`, `pinit://pin/659073726759755724` |
+| **Raw Pin IDs** | `659073726759755724` (string or number) |
+| **Direct CDN Media URLs** | `https://i.pinimg.com/originals/...jpg`, `https://v.pinimg.com/...mp4` |
 
 ---
 
@@ -41,84 +68,24 @@
 
 Install globally for CLI usage or locally in your project:
 
-### Package Managers
-
 ```bash
-# npm
+# Install locally
 npm install pinterest-media-downloader
 
-# pnpm
-pnpm add pinterest-media-downloader
-
-# yarn
-yarn add pinterest-media-downloader
-
-# bun
-bun add pinterest-media-downloader
-```
-
-### Run Instantly via NPX (No install needed)
-
-```bash
-npx pinterest-media-downloader search "cyberpunk aesthetic" --limit 5
+# Install globally for CLI
+npm install -g pinterest-media-downloader
 ```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Search for Images & Videos
-
+### 1. Download Media (Image or Video)
 ```javascript
-// ESM
-import { search } from 'pinterest-media-downloader';
+const { download } = require('pinterest-media-downloader');
 
-// CommonJS
-// const { search } = require('pinterest-media-downloader');
-
-const results = await search('cozy desk setup', {
-  limit: 10,
-  type: 'all' // 'all' | 'images' | 'videos'
-});
-
-console.log(`Found ${results.pins.length} pins:`);
-for (const pin of results.pins) {
-  console.log(`- [${pin.type.toUpperCase()}] ${pin.title}`);
-  console.log(`  Link: ${pin.link}`);
-  console.log(`  Image: ${pin.images.original}`);
-}
-```
-
----
-
-### 2. Get Metadata for Any Pin
-
-Supports full Pinterest URLs, short links (`pin.it`), or raw pin IDs:
-
-```javascript
-import { getPin } from 'pinterest-media-downloader';
-
-const pin = await getPin('https://pin.it/3L9xK2A');
-
-console.log('📌 Title:', pin.title);
-console.log('👤 Creator:', pin.metadata.pinner.fullName, `(@${pin.metadata.pinner.username})`);
-console.log('📁 Board:', pin.metadata.board.name);
-console.log('❤️ Saves:', pin.metadata.saves);
-console.log('🖼️ Original Image:', pin.images.original);
-
-if (pin.type === 'video' && pin.videos) {
-  console.log('🎥 High Quality Video:', pin.videos.high.url);
-}
-```
-
----
-
-### 3. Download Media with Real-time Progress
-
-```javascript
-import { download } from 'pinterest-media-downloader';
-
-const result = await download('https://pin.it/3L9xK2A', './downloads', {
+// Works with shortlinks, full URLs, mobile links, or raw IDs!
+const result = await download('https://pin.it/WyKwAMsAR', './my-downloads', {
   quality: 'original',
   overwrite: true,
   onProgress: (downloadedBytes, totalBytes) => {
@@ -127,16 +94,55 @@ const result = await download('https://pin.it/3L9xK2A', './downloads', {
   }
 });
 
-console.log(`\n✅ Saved to: ${result.path} (${result.sizeFormatted})`);
+console.log(`\nSaved ${result.type} to ${result.path} (${result.sizeFormatted})`);
+```
+
+### 2. Fetch Pin Information
+```javascript
+const { getPin } = require('pinterest-media-downloader');
+
+const pin = await getPin('https://pin.it/WyKwAMsAR');
+console.log('Title:', pin.title);
+console.log('Media Type:', pin.type);
+console.log('Original Image:', pin.images.original);
+if (pin.videos) {
+  console.log('Video High:', pin.videos.high.url);
+}
+```
+
+### 3. Search Pinterest
+```javascript
+const { search } = require('pinterest-media-downloader');
+
+const { pins, bookmark } = await search('cyberpunk city aesthetic', {
+  limit: 10,
+  type: 'images'
+});
+
+for (const pin of pins) {
+  console.log(`[${pin.id}] ${pin.title} -> ${pin.images.original}`);
+}
+```
+
+### 4. Direct URL Utility Helpers
+```javascript
+const { extractPinId, isPinterestUrl, isShortUrl, resolveShortUrl } = require('pinterest-media-downloader');
+
+// Check URL validity
+isPinterestUrl('https://in.pinterest.com/pin/659073726759755724/'); // true
+isShortUrl('https://pin.it/WyKwAMsAR'); // true
+
+// Extract pin ID synchronously without network request
+extractPinId('https://www.pinterest.com/idea-pin/cyberpunk/659073726759755724/'); // '659073726759755724'
+
+// Resolve short link through redirects
+const fullUrl = await resolveShortUrl('https://pin.it/WyKwAMsAR');
+console.log(fullUrl);
 ```
 
 ---
 
 ## 🖥️ CLI Tool (`pinterest-dl`)
-
-The package includes a powerful command-line interface executable as `pinterest-dl` or via `npx pinterest-media-downloader`.
-
-### Commands Overview
 
 ```
 pinterest-dl <command> [options]
@@ -151,225 +157,33 @@ Global Options:
   -v, --version        Show version number
 ```
 
-### CLI Command Options
-
-#### `pinterest-dl search <query>`
-| Option | Alias | Default | Description |
-|---|---|---|---|
-| `--limit` | `-l` | `10` | Number of results to return (1-250) |
-| `--type` | `-t` | `all` | Filter results: `all`, `images`, or `videos` |
-| `--output`| `-o` | `table` | Display format: `table` or `json` |
+### CLI Examples
 
 ```bash
-# Search aesthetic wallpapers (table view)
-pinterest-dl search "minimalist architecture" --limit 15
+# 1. Download a pin from a short link
+pinterest-dl download https://pin.it/WyKwAMsAR -o ./downloads -q high
 
-# Search cooking videos and pipe JSON to jq
-pinterest-dl search "pasta recipe" --type videos -o json | jq '.[0]'
+# 2. Inspect pin details formatted as JSON
+pinterest-dl info https://pin.it/WyKwAMsAR --json
+
+# 3. Search videos and pipe output as JSON
+pinterest-dl search "anime wallpaper" --type videos --limit 5 --json
+
+# 4. Download directly via npx without installing
+npx pinterest-dl download https://pin.it/WyKwAMsAR
 ```
 
-#### `pinterest-dl info <url>`
-| Option | Alias | Default | Description |
-|---|---|---|---|
-| `--output`| `-o` | `table` | Display format: `table` or `json` |
+---
+
+## 🧪 Testing
+
+The package includes a comprehensive URL test suite covering 80+ test cases across all Pinterest URL variations, subdomains, international ccTLDs, short URLs, custom app schemes, and live API resolution.
 
 ```bash
-pinterest-dl info https://pin.it/abc123
+npm test
 ```
 
-#### `pinterest-dl download <url>`
-| Option | Alias | Default | Description |
-|---|---|---|---|
-| `--output` | `-o` | `./` | Destination folder |
-| `--quality`| `-q` | `original` | Media quality: `original`, `high`, `medium`, `low` |
-| `--filename`| `-f` | *auto* | Custom filename (without extension) |
-| `--overwrite`| | `false` | Overwrite existing files |
-
-```bash
-# Download to ./my-gallery folder in maximum quality
-pinterest-dl download https://pin.it/abc123 -o ./my-gallery -q original
-
-# Download with a custom name
-pinterest-dl download https://pin.it/abc123 -f "hero-wallpaper"
-```
-
----
-
-## 📖 API Reference
-
-### `search(query, options?)`
-Search Pinterest for pins matching the query.
-
-```typescript
-function search(query: string, options?: SearchOptions): Promise<SearchResult>
-```
-
-#### Parameters:
-- `query` *(string, required)*: The search query string.
-- `options` *(object, optional)*:
-  - `limit` *(number, default: 25)*: Maximum items to retrieve (1 to 250).
-  - `type` *(string, default: `'all'`)*: Filter results (`'all'` | `'images'` | `'videos'`).
-  - `scope` *(string, default: `'pins'`)*: Search scope (`'pins'` | `'boards'`).
-  - `bookmark` *(string, optional)*: Cursor for pagination to fetch subsequent pages.
-
-#### Returns:
-```typescript
-{
-  pins: Pin[],
-  bookmark: string | null // Pass to next search() call to paginate
-}
-```
-
----
-
-### `getPin(urlOrId)`
-Fetch comprehensive pin details by URL, short URL, or pin ID.
-
-```typescript
-function getPin(urlOrId: string): Promise<Pin>
-```
-
-#### Pin Object Structure:
-```json
-{
-  "id": "123456789012345678",
-  "title": "Aesthetic Desktop Wallpaper",
-  "description": "Minimal 4K workspace inspiration",
-  "type": "image",
-  "link": "https://www.pinterest.com/pin/123456789012345678/",
-  "images": {
-    "small": "https://i.pinimg.com/236x/...",
-    "medium": "https://i.pinimg.com/474x/...",
-    "large": "https://i.pinimg.com/736x/...",
-    "original": "https://i.pinimg.com/originals/..."
-  },
-  "videos": {
-    "high": { "url": "https://v.pinimg.com/...", "width": 1080, "height": 1920, "duration": 15 },
-    "medium": { "url": "https://v.pinimg.com/...", "width": 720, "height": 1280, "duration": 15 },
-    "low": { "url": "https://v.pinimg.com/...", "width": 480, "height": 854, "duration": 15 }
-  },
-  "metadata": {
-    "pinner": {
-      "username": "aesthetic_curator",
-      "fullName": "Aesthetic Curator",
-      "profileUrl": "https://www.pinterest.com/aesthetic_curator/"
-    },
-    "board": {
-      "name": "Workspace Inspo",
-      "url": "https://www.pinterest.com/aesthetic_curator/workspace-inspo/"
-    },
-    "saves": 1420,
-    "comments": 28,
-    "dominantColor": "#2b303a"
-  }
-}
-```
-
----
-
-### `download(url, outputDir?, options?)`
-Stream-downloads the media file with automatic format detection and progress hooks.
-
-```typescript
-function download(
-  url: string,
-  outputDir?: string | DownloadOptions,
-  options?: DownloadOptions
-): Promise<DownloadResult>
-```
-
-#### Options:
-- `quality` *(string, default: `'original'`)*: `'original'` | `'high'` | `'medium'` | `'low'`
-- `overwrite` *(boolean, default: `false`)*: Whether to replace files if they already exist.
-- `filename` *(string, optional)*: Custom name (auto-sanitized, extension appended automatically).
-- `onProgress` *(function, optional)*: Callback `(downloadedBytes, totalBytes) => void`.
-
-#### Returns:
-```typescript
-{
-  path: "/absolute/path/to/downloads/pin-title.jpg",
-  size: 2451928,
-  sizeFormatted: "2.3 MB",
-  type: "image",
-  url: "https://i.pinimg.com/originals/...",
-  filename: "pin-title.jpg"
-}
-```
-
----
-
-## 💡 Advanced Recipes
-
-### Batch Downloading Multiple Pins Concurrently
-
-```javascript
-import { search, download } from 'pinterest-media-downloader';
-
-// 1. Search for 5 pins
-const { pins } = await search('nature photography', { limit: 5 });
-
-// 2. Download all in parallel
-const downloads = await Promise.all(
-  pins.map(pin => download(pin.link, './nature-wallpapers'))
-);
-
-console.log(`Downloaded ${downloads.length} files successfully!`);
-```
-
-### Building an Express.js API Route
-
-```javascript
-import express from 'express';
-import { getPin } from 'pinterest-media-downloader';
-
-const app = express();
-
-app.get('/api/pin', async (req, res) => {
-  try {
-    const { url } = req.query;
-    if (!url) return res.status(400).json({ error: 'URL is required' });
-
-    const pinData = await getPin(url);
-    res.json(pinData);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.listen(3000, () => console.log('Server running on :3000'));
-```
-
----
-
-## 🛡️ Error Handling
-
-Always wrap calls in `try / catch` blocks to gracefully handle network issues or private pins:
-
-```javascript
-import { getPin } from 'pinterest-media-downloader';
-
-try {
-  const pin = await getPin('https://pin.it/invalid_url');
-} catch (error) {
-  if (error.message.includes('Could not extract pin ID')) {
-    console.error('Invalid Pinterest link provided.');
-  } else {
-    console.error('Fetch failed:', error.message);
-  }
-}
-```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! If you have suggestions, bug reports, or feature requests:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Test results are automatically exported to `test-results.json` detailing execution statistics, pass/fail state, and resolution metrics.
 
 ---
 
